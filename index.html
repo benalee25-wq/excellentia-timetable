@@ -23,9 +23,12 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 .tt td.dy{background:#f4d5d8;color:#000;font-weight:700}.tt td.bk{background:#f4d5d8;color:#b0242f}.tt td.fx{background:#dff0d8;color:#1b6b2a}.tt small{color:inherit;opacity:.85}
 .wm{position:absolute;left:50%;top:50%;width:34%;transform:translate(-50%,-50%);opacity:.1;pointer-events:none}
 @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+#ld{position:fixed;inset:0;background:rgba(10,15,40,.45);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:99;color:#fff;font-weight:700}#ld.on{display:flex}
+.sp{width:48px;height:48px;border:5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media print{#ld{display:none!important}}
 </style></head><body>
 <header><h1>Excellentia Timetable Builder</h1><button id="out" style="display:none" onclick="sb.auth.signOut().then(()=>location.reload())">Log out</button></header>
-<div id="msg"></div><nav id="nav"></nav><main id="m"></main><div id="pa"></div>
+<div id="msg"></div><nav id="nav"></nav><div id="ld" class="on"><div class="sp"></div><div id="ldt">Loading...</div></div><main id="m"></main><div id="pa"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
@@ -33,7 +36,10 @@ const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
 const S={mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
-async function q(p){const r=await p;if(r.error){msg(r.error.message,1);throw r.error}return r.data}
+let busy=0;
+const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
+const busyOff=()=>{busy=Math.max(0,busy-1);setTimeout(()=>{if(!busy)$('ld').classList.remove('on')},150)};
+async function q(p){busyOn();try{const r=await p;if(r.error){msg(r.error.message,1);throw r.error}return r.data}finally{busyOff()}}
 async function load(){
  [D.arms,D.subj,D.staff,D.qual,D.alloc,D.per,D.fix,D.term,D.ver,D.av]=await Promise.all([
  q(sb.from('class_arms').select('*').order('id')),q(sb.from('subjects').select('*').order('name')),q(sb.from('staff').select('*').order('id')),
@@ -42,7 +48,7 @@ async function load(){
  D.staffAll=D.staff;D.staff=D.staff.filter(s=>s.is_active);D.set=(await q(sb.from('school_settings').select('*')))[0];D.ses=await q(sb.from('academic_sessions').select('*'));if(!S.tid)S.tid=D.staff[0]?.id;if(!S.arm)S.arm=D.arms[0]?.id;if(!S.sj)S.sj=D.subj[0]?.id;if(!S.ver&&D.ver[0])S.ver=D.ver[0].id;
  D.ent=S.ver?await q(sb.from('weekly_entries').select('*').eq('version_id',S.ver).range(0,999)):[];draw()}
 function loginUI(){$('nav').innerHTML='';$('m').innerHTML=`<div class="card"><h3>Log in</h3><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="p" onclick="login()">Log in</button></div></div>`}
-async function login(){const r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(r.error)return msg(r.error.message,1);msg('');start()}
+async function login(){busyOn('Logging in...');const r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});busyOff();if(r.error)return msg(r.error.message,1);msg('');start()}
 async function start(){$('out').style.display='';await load()}
 const perFor=d=>{const k=D.per.some(p=>p.day==d)?d:0;return D.per.filter(p=>p.day==k).sort((a,b)=>a.start_min-b.start_min)};
 const lessonP=(d=1)=>perFor(d).filter(p=>p.kind=='lesson');
@@ -61,7 +67,8 @@ async function saveAlloc(){const sid=+$('asj').value,tid=+$('ate').value,ppw=+$(
  msg('Saved '+arms.length+' allocations');await load()}
 async function mkTerm(){const [a]=await q(sb.from('academic_sessions').insert({name:'2026/2027',is_current:true}).select());
  await q(sb.from('terms').insert({session_id:a.id,name:'First Term',start_date:'2026-09-14',end_date:'2026-12-18'}));msg('Term created');await load()}
-function gen(){const LP={1:lessonP(1),2:lessonP(2),3:lessonP(3),4:lessonP(4),5:lessonP(5)},n=LP[1].length,st=Object.fromEntries(D.staff.map(s=>[s.id,s])),armOf=Object.fromEntries(D.arms.map(a=>[a.id,a]));
+function gen(){busyOn('Generating timetable...');setTimeout(()=>{try{genRun()}finally{busyOff()}},60)}
+function genRun(){const LP={1:lessonP(1),2:lessonP(2),3:lessonP(3),4:lessonP(4),5:lessonP(5)},n=LP[1].length,st=Object.fromEntries(D.staff.map(s=>[s.id,s])),armOf=Object.fromEntries(D.arms.map(a=>[a.id,a]));
  const fx=(a,d,i)=>D.fix.some(f=>f.day==d&&(!f.level_id||f.level_id==armOf[a].level_id)&&LP[d][i].period_no==f.period_no);
  const un=(s,d,i)=>D.av.some(x=>x.staff_id==s&&x.kind=='unavailable'&&x.day==d&&x.start_min<LP[d][i].end_min&&x.end_min>LP[d][i].start_min);
  const L=[],skipped=[];D.alloc.forEach(a=>{if(!a.staff_id){skipped.push(a);return}for(let k=0;k<a.double_blocks;k++)L.push({...a,len:2});for(let k=0;k<a.periods_per_week-2*a.double_blocks;k++)L.push({...a,len:1})});
@@ -113,7 +120,7 @@ async function addAv(){const lp=lessonP(+$('avd').value),f=lp.find(p=>p.period_n
 async function delStaff(id){const t=D.staff.find(x=>x.id==id),n=D.alloc.filter(a=>a.staff_id==id).length;
  if(!confirm('Remove '+t.full_name+'?'+(n?' Their '+n+' class subjects will have no teacher until you allocate them again.':'')))return;
  await q(sb.from('class_subject_alloc').update({staff_id:null}).eq('staff_id',id));
- const r=await sb.from('staff').delete().eq('id',id);
+ busyOn();const r=await sb.from('staff').delete().eq('id',id);busyOff();
  if(r.error){if(r.error.code=='23503'){await q(sb.from('staff').update({is_active:false}).eq('id',id));msg(t.full_name+' appears in a saved timetable, so was hidden instead of deleted')}else return msg(r.error.message,1)}
  else msg(t.full_name+' removed');
  await load()}
@@ -135,5 +142,5 @@ function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],
   h+=`<div class="row"><select onchange="S.ver=+this.value;load()">${D.ver.map(v=>`<option value="${v.id}" ${v.id==S.ver?'selected':''}>#${v.id} ${v.status}: ${v.label}</option>`).join('')||'<option>No saved timetables</option>'}</select><select onchange="S.mode=this.value;draw()"><option value="class" ${S.mode=='class'?'selected':''}>Class view</option><option value="teacher" ${S.mode=='teacher'?'selected':''}>Teacher view</option></select>${S.mode=='class'?`<select onchange="S.arm=+this.value;draw()">${D.arms.map(a=>`<option value="${a.id}" ${a.id==S.arm?'selected':''}>${a.code}</option>`).join('')}</select>`:`<select onchange="S.tid=+this.value;draw()">${D.staff.map(t=>`<option value="${t.id}" ${t.id==S.tid?'selected':''}>${t.full_name}</option>`).join('')}</select>`}<button onclick="window.print()">Print / PDF</button><button onclick="printAll()">Print all</button></div><div class="card">${S.ver?pg(S.mode,S.mode=='class'?S.arm:S.tid):'Generate and save a timetable first.'}</div>`}
  if(S.tab=='su')h=`<div class="card"><h3>Setup</h3><div class="row"><input id="scn" value="${D.set?.name||''}" placeholder="School name"><input id="slg" value="${D.set?.logo_url||''}" placeholder="Logo file name, e.g. logo.png"><button class="p" onclick="saveName()">Save</button></div>Terms: ${D.term.length}<div class="row">${D.term.length?'':'<button class="p" onclick="mkTerm()">Create 2026/2027 First Term</button>'}</div><small>${D.arms.length} classes, ${D.subj.length} subjects, ${lessonP().length} lesson periods per day, ${D.fix.length} fixed activities.</small></div>`;
  $('m').innerHTML=h}
-sb.auth.getSession().then(r=>r.data.session?start():loginUI());
+busyOn();sb.auth.getSession().then(r=>{busyOff();r.data.session?start():loginUI()});
 </script></body></html>
