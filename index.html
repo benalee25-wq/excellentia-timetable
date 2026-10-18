@@ -37,14 +37,15 @@ async function q(p){const r=await p;if(r.error){msg(r.error.message,1);throw r.e
 async function load(){
  [D.arms,D.subj,D.staff,D.qual,D.alloc,D.per,D.fix,D.term,D.ver,D.av]=await Promise.all([
  q(sb.from('class_arms').select('*').order('id')),q(sb.from('subjects').select('*').order('name')),q(sb.from('staff').select('*').order('id')),
- q(sb.from('teacher_qualifications').select('*')),q(sb.from('class_subject_alloc').select('*').range(0,999)),q(sb.from('period_defs').select('*').order('start_min')),
+ q(sb.from('teacher_qualifications').select('*')),q(sb.from('class_subject_alloc').select('*').range(0,999)),q(sb.from('period_defs').select('*').order('day').order('start_min')),
  q(sb.from('fixed_slots').select('*')),q(sb.from('terms').select('*')),q(sb.from('timetable_versions').select('*').order('id',{ascending:false})),q(sb.from('teacher_availability').select('*'))]);
  D.set=(await q(sb.from('school_settings').select('*')))[0];D.ses=await q(sb.from('academic_sessions').select('*'));if(!S.tid)S.tid=D.staff[0]?.id;if(!S.arm)S.arm=D.arms[0]?.id;if(!S.sj)S.sj=D.subj[0]?.id;if(!S.ver&&D.ver[0])S.ver=D.ver[0].id;
  D.ent=S.ver?await q(sb.from('weekly_entries').select('*').eq('version_id',S.ver).range(0,999)):[];draw()}
 function loginUI(){$('nav').innerHTML='';$('m').innerHTML=`<div class="card"><h3>Log in</h3><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="p" onclick="login()">Log in</button></div></div>`}
 async function login(){const r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(r.error)return msg(r.error.message,1);msg('');start()}
 async function start(){$('out').style.display='';await load()}
-const lessonP=()=>D.per.filter(p=>p.kind=='lesson');
+const perFor=d=>{const k=D.per.some(p=>p.day==d)?d:0;return D.per.filter(p=>p.day==k).sort((a,b)=>a.start_min-b.start_min)};
+const lessonP=(d=1)=>perFor(d).filter(p=>p.kind=='lesson');
 const nm=id=>D.staff.find(s=>s.id==id)?.initials||D.staff.find(s=>s.id==id)?.full_name||'?';
 const code=id=>D.subj.find(s=>s.id==id)?.code,sn=id=>D.subj.find(s=>s.id==id)?.name;
 async function addStaff(){const v=i=>$(i).value.trim();if(!v('sn')||!v('fn'))return msg('Staff ID and full name are required',1);
@@ -60,22 +61,22 @@ async function saveAlloc(){const sid=+$('asj').value,tid=+$('ate').value,ppw=+$(
  msg('Saved '+arms.length+' allocations');await load()}
 async function mkTerm(){const [a]=await q(sb.from('academic_sessions').insert({name:'2026/2027',is_current:true}).select());
  await q(sb.from('terms').insert({session_id:a.id,name:'First Term',start_date:'2026-09-14',end_date:'2026-12-18'}));msg('Term created');await load()}
-function gen(){const lp=lessonP(),n=lp.length,st=Object.fromEntries(D.staff.map(s=>[s.id,s])),armOf=Object.fromEntries(D.arms.map(a=>[a.id,a]));
- const fx=(a,d,i)=>D.fix.some(f=>f.day==d&&(!f.level_id||f.level_id==armOf[a].level_id)&&lp[i].period_no==f.period_no);
- const un=(s,d,i)=>D.av.some(x=>x.staff_id==s&&x.kind=='unavailable'&&x.day==d&&x.start_min<lp[i].end_min&&x.end_min>lp[i].start_min);
+function gen(){const LP={1:lessonP(1),2:lessonP(2),3:lessonP(3),4:lessonP(4),5:lessonP(5)},n=LP[1].length,st=Object.fromEntries(D.staff.map(s=>[s.id,s])),armOf=Object.fromEntries(D.arms.map(a=>[a.id,a]));
+ const fx=(a,d,i)=>D.fix.some(f=>f.day==d&&(!f.level_id||f.level_id==armOf[a].level_id)&&LP[d][i].period_no==f.period_no);
+ const un=(s,d,i)=>D.av.some(x=>x.staff_id==s&&x.kind=='unavailable'&&x.day==d&&x.start_min<LP[d][i].end_min&&x.end_min>LP[d][i].start_min);
  const L=[],skipped=[];D.alloc.forEach(a=>{if(!a.staff_id){skipped.push(a);return}for(let k=0;k<a.double_blocks;k++)L.push({...a,len:2});for(let k=0;k<a.periods_per_week-2*a.double_blocks;k++)L.push({...a,len:1})});
  let best=null;
  for(let t=0;t<40;t++){const cb=new Set,tb=new Set,td={},tw={},sd=new Set,E=[],miss=[];
   const Q=L.map(x=>x).sort(()=>Math.random()-.5).sort((x,y)=>y.len-x.len);
   for(const l of Q){const sf=st[l.staff_id],md=sf.max_periods_day||99,mw=sf.max_periods_week||99;let bs=1e9,bd,bi;
    if((tw[l.staff_id]||0)+l.len<=mw)for(let d=1;d<=5;d++){const dn=td[l.staff_id+':'+d]||0;if(dn+l.len>md)continue;
-    for(let i=0;i+l.len<=n;i++){if(l.len==2&&lp[i].end_min!=lp[i+1].start_min)continue;let ok=true;
+    for(let i=0;i+l.len<=n;i++){if(l.len==2&&LP[d][i].end_min!=LP[d][i+1].start_min)continue;let ok=true;
      for(let k=0;k<l.len;k++){const j=i+k;if(cb.has(l.arm_id+':'+d+':'+j)||tb.has(l.staff_id+':'+d+':'+j)||fx(l.arm_id,d,j)||un(l.staff_id,d,j)){ok=false;break}}
      if(!ok)continue;const sc=Math.random()*3+(sd.has(l.arm_id+':'+l.subject_id+':'+d)?50:0)+dn*2;if(sc<bs){bs=sc;bd=d;bi=i}}}
    if(bs==1e9){miss.push(l);continue}
    for(let k=0;k<l.len;k++){cb.add(l.arm_id+':'+bd+':'+(bi+k));tb.add(l.staff_id+':'+bd+':'+(bi+k))}
    td[l.staff_id+':'+bd]=(td[l.staff_id+':'+bd]||0)+l.len;tw[l.staff_id]=(tw[l.staff_id]||0)+l.len;sd.add(l.arm_id+':'+l.subject_id+':'+bd);
-   E.push({arm_id:l.arm_id,subject_id:l.subject_id,staff_id:l.staff_id,day:bd,start_min:lp[bi].start_min,end_min:lp[bi+l.len-1].end_min,is_double:l.len==2})}
+   E.push({arm_id:l.arm_id,subject_id:l.subject_id,staff_id:l.staff_id,day:bd,start_min:LP[bd][bi].start_min,end_min:LP[bd][bi+l.len-1].end_min,is_double:l.len==2})}
   if(!best||miss.length<best.miss.length)best={E,miss};if(!miss.length)break}
  S.res={...best,skipped,total:L.length};draw()}
 async function saveVer(){if(!S.res||!D.term[0])return msg('Generate first, and create a term in Setup',1);
@@ -87,10 +88,10 @@ async function publish(){if(!confirm('Publish this timetable?'))return;await q(s
 const fm=x=>`${String(x/60|0).padStart(2,'0')}:${String(x%60).padStart(2,'0')}`;
 const f12=x=>{const h=x/60|0;return(h>12?h-12:h)+':'+String(x%60).padStart(2,'0')};
 const DF=['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'];
-function grid(mode,id){const arm=mode=='class'?D.arms.find(a=>a.id==id):null,P=D.per;
- let h='<div class="sc tt">'+(D.set?.logo_url?`<img class="wm" src="${D.set.logo_url}">`:'')+'<table><tr><th>DAY</th>'+P.map((p,i)=>`<th>Slot ${i+1}</th>`).join('')+'</tr>';
+function grid(mode,id){const arm=mode=='class'?D.arms.find(a=>a.id==id):null,P1=perFor(1);
+ let h='<div class="sc tt">'+(D.set?.logo_url?`<img class="wm" src="${D.set.logo_url}">`:'')+'<table><tr><th>DAY</th>'+P1.map((p,i)=>`<th>Slot ${i+1}</th>`).join('')+'</tr>';
  DF.forEach((dn,di)=>{const d=di+1;h+=`<tr><td class="dy">${dn}</td>`;
-  P.forEach(p=>{const t=f12(p.start_min)+'-'+f12(p.end_min);
+  perFor(d).forEach(p=>{const t=f12(p.start_min)+'-'+f12(p.end_min);
    if(p.kind!='lesson'){h+=`<td class="bk"><b>${p.label.toUpperCase()}</b><br><small>${t}</small></td>`;return}
    const fx=D.fix.find(z=>z.day==d&&z.period_no==p.period_no&&(!z.level_id||(arm&&z.level_id==arm.level_id)));
    const e=D.ent.find(z=>(mode=='class'?z.arm_id==id:z.staff_id==id)&&z.day==d&&z.start_min<=p.start_min&&z.end_min>=p.end_min);
@@ -101,7 +102,7 @@ const pg=(mode,id)=>{const ses=D.ses.find(x=>x.id==D.term[0]?.session_id)?.name|
 function printAll(){if(!S.ver)return;const ids=S.mode=='class'?D.arms.map(a=>a.id):D.staff.filter(s=>D.ent.some(e=>e.staff_id==s.id)).map(s=>s.id);
  $('pa').innerHTML=ids.map(i=>`<section class="pg">${pg(S.mode,i)}</section>`).join('');document.body.classList.add('pall');
  window.onafterprint=()=>{document.body.classList.remove('pall');$('pa').innerHTML=''};window.print()}
-async function addAv(){const lp=lessonP(),f=lp.find(p=>p.period_no==+$('avf').value),u=lp.find(p=>p.period_no==+$('avu').value);
+async function addAv(){const lp=lessonP(+$('avd').value),f=lp.find(p=>p.period_no==+$('avf').value),u=lp.find(p=>p.period_no==+$('avu').value);
  if(!$('avt').value||u.period_no<f.period_no)return msg('Choose a teacher and a valid period range',1);
  await q(sb.from('teacher_availability').insert({staff_id:+$('avt').value,day:+$('avd').value,start_min:f.start_min,end_min:u.end_min,kind:'unavailable'}));msg('Saved');await load()}
 async function delAv(id){await q(sb.from('teacher_availability').delete().eq('id',id));await load()}
