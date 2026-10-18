@@ -5,16 +5,16 @@
 <style>
 :root{--bg:#f6f7fb;--fg:#1b2030;--card:#fff;--mut:#667;--pri:#1e5eff;--bad:#c62828;--ok:#1b7f3b;--bd:#dde1ec;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#10131c;--fg:#e8ebf5;--card:#1a1f2e;--mut:#9aa3b8;--pri:#6c9bff;--bad:#ff7b72;--ok:#4cc38a;--bd:#2c3347;color-scheme:dark}}
-*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,sans-serif}
-header{padding:12px 14px;display:flex;justify-content:space-between;align-items:center}h1{font-size:18px;margin:0}h3{margin:6px 0}small{color:var(--mut)}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);min-height:100vh;background:linear-gradient(135deg,#6a11cb 0%,#2575fc 30%,#00c6a7 65%,#ffb347 100%) fixed;color:var(--fg);font:15px/1.4 system-ui,sans-serif}
+header{padding:12px 14px;display:flex;justify-content:space-between;align-items:center}h1{font-size:20px;margin:0;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35)}h3{margin:6px 0}small{color:var(--mut)}
 nav{display:flex;gap:6px;overflow-x:auto;padding:0 14px 8px}nav button{white-space:nowrap}
 button,select,input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--fg)}
-button.p{background:var(--pri);color:#fff;border-color:var(--pri)}button.on{border-color:var(--pri);color:var(--pri);font-weight:600}button:disabled{opacity:.45}
-main{padding:0 14px 30px}.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:10px 0}
+button.p{background:linear-gradient(135deg,#7b2ff7,#1e5eff);color:#fff;border-color:transparent}button.on{background:#fff3c4;border-color:#ffb300;color:#6b4200;font-weight:700}button:disabled{opacity:.45}
+main{padding:0 14px 30px}.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px;margin:10px 0;box-shadow:0 6px 18px rgba(0,0,0,.2)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.row input{width:100%}.half input{width:48%}
 label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font-size:13px}label.c input{width:auto}
-.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:520px;font-size:12px}th,td{border:1px solid var(--bd);padding:4px;text-align:center;vertical-align:top}td{height:44px}tr.br td{background:var(--bd);color:var(--mut);height:auto;font-size:11px}
-#msg{margin:8px 14px;font-weight:600}.bad{color:var(--bad)}.ok{color:var(--ok)}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:520px;font-size:12px}th,td{border:1px solid var(--bd);padding:4px;text-align:center;vertical-align:top}td{height:44px}th{background:linear-gradient(135deg,rgba(123,47,247,.18),rgba(0,198,167,.18))}tr.br td{background:var(--bd);color:var(--mut);height:auto;font-size:11px}
+#msg{margin:8px 14px;font-weight:600;background:var(--card);padding:8px 12px;border-radius:10px}#msg:empty{display:none}.bad{color:var(--bad)}.ok{color:var(--ok)}
 </style></head><body>
 <header><h1>Excellentia Timetable Builder</h1><button id="out" style="display:none" onclick="sb.auth.signOut().then(()=>location.reload())">Log out</button></header>
 <div id="msg"></div><nav id="nav"></nav><main id="m"></main>
