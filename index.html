@@ -26,6 +26,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 #ld{position:fixed;inset:0;background:rgba(10,15,40,.45);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:99;color:#fff;font-weight:700}#ld.on{display:flex}
 .sp{width:48px;height:48px;border:5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media print{#ld{display:none!important}}
+.tt td.sel{outline:3px solid #ffb300;outline-offset:-3px}.tt td[onclick]{cursor:pointer}
 </style></head><body>
 <header><h1>Excellentia Timetable Builder</h1><button id="out" style="display:none" onclick="sb.auth.signOut().then(()=>location.reload())">Log out</button></header>
 <div id="msg"></div><nav id="nav"></nav><div id="ld" class="on"><div class="sp"></div><div id="ldt">Loading...</div></div><main id="m"></main><div id="pa"></div>
@@ -34,7 +35,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
 const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
-const S={mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
+const S={sel:null,mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
 let busy=0;
 const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
@@ -72,9 +73,15 @@ function genRun(){const LP={1:lessonP(1),2:lessonP(2),3:lessonP(3),4:lessonP(4),
  const fx=(a,d,i)=>D.fix.some(f=>f.day==d&&(!f.level_id||f.level_id==armOf[a].level_id)&&LP[d][i].period_no==f.period_no);
  const un=(s,d,i)=>D.av.some(x=>x.staff_id==s&&x.kind=='unavailable'&&x.day==d&&x.start_min<LP[d][i].end_min&&x.end_min>LP[d][i].start_min);
  const L=[],skipped=[];D.alloc.forEach(a=>{if(!a.staff_id){skipped.push(a);return}for(let k=0;k<a.double_blocks;k++)L.push({...a,len:2});for(let k=0;k<a.periods_per_week-2*a.double_blocks;k++)L.push({...a,len:1})});
+ const lk=D.ent.filter(e=>e.locked),L2=L.slice();
+ lk.forEach(e=>{const len=e.is_double?2:1,k=L2.findIndex(l=>l.arm_id==e.arm_id&&l.subject_id==e.subject_id&&l.len==len);
+  if(k>=0)L2.splice(k,1);else for(let c=0;c<len;c++){const j=L2.findIndex(l=>l.arm_id==e.arm_id&&l.subject_id==e.subject_id&&l.len==1);if(j>=0)L2.splice(j,1)}});
  let best=null;
  for(let t=0;t<40;t++){const cb=new Set,tb=new Set,td={},tw={},sd=new Set,E=[],miss=[];
-  const Q=L.map(x=>x).sort(()=>Math.random()-.5).sort((x,y)=>y.len-x.len);
+  lk.forEach(e=>{const bi=LP[e.day].findIndex(p=>p.start_min==e.start_min),len=e.is_double?2:1;for(let k=0;k<len;k++){cb.add(e.arm_id+':'+e.day+':'+(bi+k));tb.add(e.staff_id+':'+e.day+':'+(bi+k))}
+   td[e.staff_id+':'+e.day]=(td[e.staff_id+':'+e.day]||0)+len;tw[e.staff_id]=(tw[e.staff_id]||0)+len;sd.add(e.arm_id+':'+e.subject_id+':'+e.day);
+   E.push({arm_id:e.arm_id,subject_id:e.subject_id,staff_id:e.staff_id,day:e.day,start_min:e.start_min,end_min:e.end_min,is_double:e.is_double,locked:true})});
+  const Q=L2.map(x=>x).sort(()=>Math.random()-.5).sort((x,y)=>y.len-x.len);
   for(const l of Q){const sf=st[l.staff_id],md=sf.max_periods_day||99,mw=sf.max_periods_week||99;let bs=1e9,bd,bi;
    if((tw[l.staff_id]||0)+l.len<=mw)for(let d=1;d<=5;d++){const dn=td[l.staff_id+':'+d]||0;if(dn+l.len>md)continue;
     for(let i=0;i+l.len<=n;i++){if(l.len==2&&LP[d][i].end_min!=LP[d][i+1].start_min)continue;let ok=true;
@@ -107,7 +114,7 @@ function grid(mode,id){const arm=mode=='class'?D.arms.find(a=>a.id==id):null,P1=
    if(p.kind!='lesson'){h+=`<td class="bk"><b>${p.label.toUpperCase()}</b><br><small>${t}</small></td>`;return}
    const fx=D.fix.find(z=>z.day==d&&z.period_no==p.period_no&&(!z.level_id||(arm&&z.level_id==arm.level_id)));
    const e=D.ent.find(z=>(mode=='class'?z.arm_id==id:z.staff_id==id)&&z.day==d&&z.start_min<=p.start_min&&z.end_min>=p.end_min);
-   h+=fx?`<td class="fx"><b>${fx.label.toUpperCase()}</b><br><small>${t}</small></td>`:e?`<td><b>${sn(e.subject_id)}</b><br><small>${t}</small><br><small>${mode=='class'?nm(e.staff_id):D.arms.find(a=>a.id==e.arm_id).code}</small></td>`:`<td><small>${t}</small></td>`});
+   h+=fx?`<td class="fx"><b>${fx.label.toUpperCase()}</b><br><small>${t}</small></td>`:e?`<td${mode=='class'?` class="${S.sel==e.id?'sel':''}" onclick="selCell(${e.id})"`:''}><b>${sn(e.subject_id)}${e.locked?' 🔒':''}</b><br><small>${t}</small><br><small>${mode=='class'?nm(e.staff_id):D.arms.find(a=>a.id==e.arm_id).code}</small></td>`:`<td${mode=='class'&&S.sel?` onclick="moveTo(${d},${p.period_no})"`:''}><small>${t}</small></td>`});
   h+='</tr>'});return h+'</table></div>'}
 const pg=(mode,id)=>{const ses=D.ses.find(x=>x.id==D.term[0]?.session_id)?.name||'',who=mode=='class'?D.arms.find(a=>a.id==id).code+' TIME TABLE':'TEACHER: '+D.staff.find(t=>t.id==id).full_name.toUpperCase()+' TIME TABLE';
  return `<div class="ph">${D.set?.logo_url?`<img class="lg" src="${D.set.logo_url}">`:''}<h2>${(D.set?.name||'').toUpperCase()}</h2><i>${ses} ACADEMIC SESSION</i><br><b>${who}</b></div>`+grid(mode,id)+'<div class="pt sg">Timetable Officer: ______________ &nbsp; Principal: ______________ &nbsp; Date: ________</div>'};
@@ -124,6 +131,13 @@ async function delStaff(id){const t=D.staff.find(x=>x.id==id),n=D.alloc.filter(a
  if(r.error){if(r.error.code=='23503'){await q(sb.from('staff').update({is_active:false}).eq('id',id));msg(t.full_name+' appears in a saved timetable, so was hidden instead of deleted')}else return msg(r.error.message,1)}
  else msg(t.full_name+' removed');
  await load()}
+function selCell(id){S.sel=S.sel==id?null:id;draw()}
+function selBar(){const e=D.ent.find(x=>x.id==S.sel);if(!e||S.mode!='class')return S.mode=='class'?'<div class="card"><small>Tap a lesson to move or lock it.</small></div>':'';
+ return `<div class="card"><b>${sn(e.subject_id)}</b> \u00b7 ${DF[e.day-1]} ${f12(e.start_min)}${e.locked?' \u00b7 locked':''}<br><small>Tap an empty slot to move it.</small><div class="row"><button onclick="toggleLock()">${e.locked?'Unlock':'Lock'}</button><button onclick="S.sel=null;draw()">Cancel</button></div></div>`}
+async function moveTo(d,pn){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;const lp=lessonP(d),i=lp.findIndex(p=>p.period_no==pn),len=e.is_double?2:1,last=lp[i+len-1];
+ if(!last)return msg('A double lesson needs two periods in a row there',1);
+ await q(sb.from('weekly_entries').update({day:d,start_min:lp[i].start_min,end_min:last.end_min}).eq('id',e.id));S.sel=null;msg('Lesson moved');await load()}
+async function toggleLock(){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;await q(sb.from('weekly_entries').update({locked:!e.locked}).eq('id',e.id));msg(e.locked?'Unlocked':'Locked');await load()}
 async function delAv(id){await q(sb.from('teacher_availability').delete().eq('id',id));await load()}
 async function saveName(){await q(sb.from('school_settings').update({name:$('scn').value.trim(),logo_url:$('slg').value.trim()||null}).eq('id',1));msg('School name saved');await load()}
 function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],['su','Setup']];
@@ -139,7 +153,7 @@ function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],
   <div class="card sc"><b>Periods allocated per class</b>${D.alloc.some(a=>!a.staff_id)?`<div class="bad">${D.alloc.filter(a=>!a.staff_id).length} class subjects have no teacher. Allocate them again.</div>`:''} (about ${lessonP().length*5-D.fix.length} slots available)<table><tr><th>Class</th><th>Periods</th><th>Subjects</th></tr>${D.arms.map(a=>{const r=D.alloc.filter(x=>x.arm_id==a.id);return`<tr><td>${a.code}</td><td>${r.reduce((x,y)=>x+y.periods_per_week,0)}</td><td>${r.length}</td></tr>`}).join('')}</table></div>`}
  if(S.tab=='tt'){const r=S.res;h=`<div class="row"><button class="p" onclick="gen()">Generate</button><button onclick="saveVer()" ${r?'':'disabled'}>Save as draft</button><button onclick="publish()" ${S.ver?'':'disabled'}>Publish selected</button></div>`;
   if(r)h+=`<div class="card"><b class="${r.miss.length?'bad':'ok'}">${r.total-r.miss.length} of ${r.total} lessons placed</b><div class="${r.clashes.length?'bad':'ok'}">${r.clashes.length?r.clashes.slice(0,10).join('<br>'):'Clash check passed: no teacher is in two classes at the same time, across JSS and SS'}</div>${r.miss.slice(0,15).map(l=>`<div class="bad">Not placed: ${D.arms.find(a=>a.id==l.arm_id).code} ${sn(l.subject_id)}</div>`).join('')}${r.skipped.length?`<div class="bad">${r.skipped.length} allocations have no teacher and were skipped</div>`:''}<small>Nothing is saved until you tap Save as draft. The database re-checks every lesson for clashes.</small></div>`;
-  h+=`<div class="row"><select onchange="S.ver=+this.value;load()">${D.ver.map(v=>`<option value="${v.id}" ${v.id==S.ver?'selected':''}>#${v.id} ${v.status}: ${v.label}</option>`).join('')||'<option>No saved timetables</option>'}</select><select onchange="S.mode=this.value;draw()"><option value="class" ${S.mode=='class'?'selected':''}>Class view</option><option value="teacher" ${S.mode=='teacher'?'selected':''}>Teacher view</option></select>${S.mode=='class'?`<select onchange="S.arm=+this.value;draw()">${D.arms.map(a=>`<option value="${a.id}" ${a.id==S.arm?'selected':''}>${a.code}</option>`).join('')}</select>`:`<select onchange="S.tid=+this.value;draw()">${D.staff.map(t=>`<option value="${t.id}" ${t.id==S.tid?'selected':''}>${t.full_name}</option>`).join('')}</select>`}<button onclick="window.print()">Print / PDF</button><button onclick="printAll()">Print all</button></div><div class="card">${S.ver?pg(S.mode,S.mode=='class'?S.arm:S.tid):'Generate and save a timetable first.'}</div>`}
+  h+=`<div class="row"><select onchange="S.ver=+this.value;load()">${D.ver.map(v=>`<option value="${v.id}" ${v.id==S.ver?'selected':''}>#${v.id} ${v.status}: ${v.label}</option>`).join('')||'<option>No saved timetables</option>'}</select><select onchange="S.mode=this.value;draw()"><option value="class" ${S.mode=='class'?'selected':''}>Class view</option><option value="teacher" ${S.mode=='teacher'?'selected':''}>Teacher view</option></select>${S.mode=='class'?`<select onchange="S.arm=+this.value;draw()">${D.arms.map(a=>`<option value="${a.id}" ${a.id==S.arm?'selected':''}>${a.code}</option>`).join('')}</select>`:`<select onchange="S.tid=+this.value;draw()">${D.staff.map(t=>`<option value="${t.id}" ${t.id==S.tid?'selected':''}>${t.full_name}</option>`).join('')}</select>`}<button onclick="window.print()">Print / PDF</button><button onclick="printAll()">Print all</button></div>${S.ver?selBar():''}<div class="card">${S.ver?pg(S.mode,S.mode=='class'?S.arm:S.tid):'Generate and save a timetable first.'}</div>`}
  if(S.tab=='su')h=`<div class="card"><h3>Setup</h3><div class="row"><input id="scn" value="${D.set?.name||''}" placeholder="School name"><input id="slg" value="${D.set?.logo_url||''}" placeholder="Logo file name, e.g. logo.png"><button class="p" onclick="saveName()">Save</button></div>Terms: ${D.term.length}<div class="row">${D.term.length?'':'<button class="p" onclick="mkTerm()">Create 2026/2027 First Term</button>'}</div><small>${D.arms.length} classes, ${D.subj.length} subjects, ${lessonP().length} lesson periods per day, ${D.fix.length} fixed activities.</small></div>`;
  $('m').innerHTML=h}
 busyOn();sb.auth.getSession().then(r=>{busyOff();r.data.session?start():loginUI()});
