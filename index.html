@@ -35,7 +35,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
 const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
-const S={sel:null,mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
+const S={ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
 let busy=0;
 const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
@@ -47,7 +47,7 @@ async function load(){
  q(sb.from('teacher_qualifications').select('*')),q(sb.from('class_subject_alloc').select('*').range(0,999)),q(sb.from('period_defs').select('*').order('day').order('start_min')),
  q(sb.from('fixed_slots').select('*')),q(sb.from('terms').select('*')),q(sb.from('timetable_versions').select('*').order('id',{ascending:false})),q(sb.from('teacher_availability').select('*'))]);
  D.staffAll=D.staff;D.staff=D.staff.filter(s=>s.is_active);D.set=(await q(sb.from('school_settings').select('*')))[0];D.ses=await q(sb.from('academic_sessions').select('*'));if(!S.tid)S.tid=D.staff[0]?.id;if(!S.arm)S.arm=D.arms[0]?.id;if(!S.sj)S.sj=D.subj[0]?.id;if(!S.ver&&D.ver[0])S.ver=D.ver[0].id;
- D.ent=S.ver?await q(sb.from('weekly_entries').select('*').eq('version_id',S.ver).range(0,999)):[];draw()}
+ D.ent=S.ver?await q(sb.from('weekly_entries').select('*').eq('version_id',S.ver).range(0,999)):[];await loadEx();draw()}
 function loginUI(){$('nav').innerHTML='';$('m').innerHTML=`<div class="card"><h3>Log in</h3><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="p" onclick="login()">Log in</button></div></div>`}
 async function login(){busyOn('Logging in...');const r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});busyOff();if(r.error)return msg(r.error.message,1);msg('');start()}
 async function start(){$('out').style.display='';await load()}
@@ -140,7 +140,7 @@ async function moveTo(d,pn){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;cons
 async function toggleLock(){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;await q(sb.from('weekly_entries').update({locked:!e.locked}).eq('id',e.id));msg(e.locked?'Unlocked':'Locked');await load()}
 async function delAv(id){await q(sb.from('teacher_availability').delete().eq('id',id));await load()}
 async function saveName(){await q(sb.from('school_settings').update({name:$('scn').value.trim(),logo_url:$('slg').value.trim()||null}).eq('id',1));msg('School name saved');await load()}
-function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],['su','Setup']];
+function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],['ex','Exams'],['su','Setup']];
  $('nav').innerHTML=T.map(t=>`<button class="${S.tab==t[0]?'on':''}" onclick="S.tab='${t[0]}';draw()">${t[1]}</button>`).join('');let h='';
  if(S.tab=='staff')h=`<div class="card"><h3>Add teacher</h3><div class="row half"><input id="sn" placeholder="Staff ID"><input id="ini" placeholder="Initials"></div><div class="row"><input id="fn" placeholder="Full name"></div><div class="row half"><input id="md" type="number" placeholder="Max per day (6)"><input id="mw" type="number" placeholder="Max per week (26)"></div><b>Subjects qualified to teach</b><div>${D.subj.map(s=>`<label class="c sl"><input type="checkbox" class="sj" value="${s.id}">${s.name}</label>`).join('')}</div><div class="row"><button class="p" onclick="addStaff()">Save teacher</button></div></div>
  <div class="card"><h3>Teacher unavailable times</h3><div class="row"><select id="avt">${D.staff.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('')}</select><select id="avd">${DAYS.map((d,i)=>`<option value="${i+1}">${d}</option>`).join('')}</select></div><div class="row"><select id="avf">${lessonP().map(p=>`<option value="${p.period_no}">From P${p.period_no}</option>`).join('')}</select><select id="avu">${lessonP().map(p=>`<option value="${p.period_no}">To P${p.period_no}</option>`).join('')}</select><button class="p" onclick="addAv()">Add</button></div>${D.av.map(x=>`<div class="row"><small>${nm(x.staff_id)} \u00b7 ${DAYS[x.day-1]} ${fm(x.start_min)}\u2013${fm(x.end_min)}</small><button onclick="delAv(${x.id})">Remove</button></div>`).join('')}</div>
@@ -154,7 +154,87 @@ function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],
  if(S.tab=='tt'){const r=S.res;h=`<div class="row"><button class="p" onclick="gen()">Generate</button><button onclick="saveVer()" ${r?'':'disabled'}>Save as draft</button><button onclick="publish()" ${S.ver?'':'disabled'}>Publish selected</button></div>`;
   if(r)h+=`<div class="card"><b class="${r.miss.length?'bad':'ok'}">${r.total-r.miss.length} of ${r.total} lessons placed</b><div class="${r.clashes.length?'bad':'ok'}">${r.clashes.length?r.clashes.slice(0,10).join('<br>'):'Clash check passed: no teacher is in two classes at the same time, across JSS and SS'}</div>${r.miss.slice(0,15).map(l=>`<div class="bad">Not placed: ${D.arms.find(a=>a.id==l.arm_id).code} ${sn(l.subject_id)}</div>`).join('')}${r.skipped.length?`<div class="bad">${r.skipped.length} allocations have no teacher and were skipped</div>`:''}<small>Nothing is saved until you tap Save as draft. The database re-checks every lesson for clashes.</small></div>`;
   h+=`<div class="row"><select onchange="S.ver=+this.value;load()">${D.ver.map(v=>`<option value="${v.id}" ${v.id==S.ver?'selected':''}>#${v.id} ${v.status}: ${v.label}</option>`).join('')||'<option>No saved timetables</option>'}</select><select onchange="S.mode=this.value;draw()"><option value="class" ${S.mode=='class'?'selected':''}>Class view</option><option value="teacher" ${S.mode=='teacher'?'selected':''}>Teacher view</option></select>${S.mode=='class'?`<select onchange="S.arm=+this.value;draw()">${D.arms.map(a=>`<option value="${a.id}" ${a.id==S.arm?'selected':''}>${a.code}</option>`).join('')}</select>`:`<select onchange="S.tid=+this.value;draw()">${D.staff.map(t=>`<option value="${t.id}" ${t.id==S.tid?'selected':''}>${t.full_name}</option>`).join('')}</select>`}<button onclick="window.print()">Print / PDF</button><button onclick="printAll()">Print all</button></div>${S.ver?selBar():''}<div class="card">${S.ver?pg(S.mode,S.mode=='class'?S.arm:S.tid):'Generate and save a timetable first.'}</div>`}
+ if(S.tab=='ex')h=exHTML();
  if(S.tab=='su')h=`<div class="card"><h3>Setup</h3><div class="row"><input id="scn" value="${D.set?.name||''}" placeholder="School name"><input id="slg" value="${D.set?.logo_url||''}" placeholder="Logo file name, e.g. logo.png"><button class="p" onclick="saveName()">Save</button></div>Terms: ${D.term.length}<div class="row">${D.term.length?'':'<button class="p" onclick="mkTerm()">Create 2026/2027 First Term</button>'}</div><small>${D.arms.length} classes, ${D.subj.length} subjects, ${lessonP().length} lesson periods per day, ${D.fix.length} fixed activities.</small></div>`;
  $('m').innerHTML=h}
+// ===== First CA, Second CA and exams =====
+const KIND={first_ca:'First CA',second_ca:'Second CA',exam:'End-of-term Exam'};
+const dfmt=d=>new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const tmin=v=>{const[h,m]=v.split(':');return +h*60+ +m};
+async function loadEx(){D.ev=await q(sb.from('assessment_events').select('*').order('id',{ascending:false}));D.rooms=await q(sb.from('rooms').select('*').order('name'));
+ if(!S.ev&&D.ev[0])S.ev=D.ev[0].id;
+ if(S.ev){[D.asess,D.req,D.sit,D.xent,D.inv]=await Promise.all([q(sb.from('assessment_sessions').select('*').eq('event_id',S.ev).order('session_no')),q(sb.from('assessment_requirements').select('*').eq('event_id',S.ev).range(0,999)),q(sb.from('assessment_sittings').select('*').eq('event_id',S.ev).range(0,999)),q(sb.from('assessment_entries').select('*').eq('event_id',S.ev).range(0,999)),q(sb.from('invigilations').select('*').range(0,999))]);
+  D.inv=D.inv.filter(i=>D.sit.some(s=>s.id==i.sitting_id))}else{D.asess=[];D.req=[];D.sit=[];D.xent=[];D.inv=[]}}
+async function mkEvent(){const g=i=>$(i).value;if(!g('evn')||!g('evs')||!g('eve'))return msg('Fill the name and both dates',1);if(!D.term[0])return msg('Create a term in Setup first',1);
+ const [e]=await q(sb.from('assessment_events').insert({term_id:D.term[0].id,kind:g('evk'),name:g('evn'),start_date:g('evs'),end_date:g('eve')}).select());S.ev=e.id;S.xres=null;msg('Created');await load()}
+function setEv(v){S.ev=+v;S.xres=null;load()}
+async function addSess(){const a=tmin($('ss1').value),b=tmin($('ss2').value);if(b<=a)return msg('End time must be after start time',1);
+ await q(sb.from('assessment_sessions').insert({event_id:S.ev,session_no:(D.asess.length?D.asess[D.asess.length-1].session_no:0)+1,start_min:a,end_min:b}));await load()}
+async function delSess(id){await q(sb.from('assessment_sessions').delete().eq('id',id));await load()}
+async function addRooms(){const have=new Set(D.rooms.map(r=>r.name)),rows=D.arms.filter(a=>!have.has(a.code)).map(a=>({name:a.code,room_type:'classroom'}));
+ if(!rows.length)return msg('Every class already has a room');await q(sb.from('rooms').insert(rows));msg(rows.length+' rooms added');await load()}
+async function loadReq(){const dur=+$('dur').value||60;if(!D.alloc.length)return msg('Allocate subjects to classes first',1);
+ const rows=D.alloc.map(a=>({event_id:S.ev,arm_id:a.arm_id,subject_id:a.subject_id,duration_min:dur}));
+ for(let i=0;i<rows.length;i+=300)await q(sb.from('assessment_requirements').upsert(rows.slice(i,i+300),{onConflict:'event_id,arm_id,subject_id'}));msg(rows.length+' papers loaded');await load()}
+async function copyFrom(){const src=+$('cps').value;if(!src)return;if(!confirm('Copy sessions and papers from that assessment? Dates are not copied.'))return;
+ const [ss,rq]=await Promise.all([q(sb.from('assessment_sessions').select('*').eq('event_id',src)),q(sb.from('assessment_requirements').select('*').eq('event_id',src).range(0,999))]);
+ await q(sb.from('assessment_sessions').delete().eq('event_id',S.ev));await q(sb.from('assessment_requirements').delete().eq('event_id',S.ev));
+ if(ss.length)await q(sb.from('assessment_sessions').insert(ss.map(x=>({event_id:S.ev,session_no:x.session_no,start_min:x.start_min,end_min:x.end_min}))));
+ for(let i=0;i<rq.length;i+=300)await q(sb.from('assessment_requirements').insert(rq.slice(i,i+300).map(x=>({event_id:S.ev,arm_id:x.arm_id,subject_id:x.subject_id,duration_min:x.duration_min}))));
+ await q(sb.from('assessment_events').update({copied_from_event_id:src}).eq('id',S.ev));msg('Setup copied. Dates are unchanged.');await load()}
+function genExam(){busyOn('Generating...');setTimeout(()=>{try{genExamRun()}finally{busyOff()}},60)}
+function genExamRun(){const ev=D.ev.find(e=>e.id==S.ev);if(!ev)return;
+ const days=[];for(let d=new Date(ev.start_date+'T00:00:00Z');d<=new Date(ev.end_date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1)){const w=d.getUTCDay();if(w>=1&&w<=5)days.push(d.toISOString().slice(0,10))}
+ const ses=D.asess;if(!ses.length||!D.req.length||!D.rooms.length||!D.staff.length)return msg('Add daily sittings, rooms and papers first, and make sure teachers exist',1);
+ const armBy=Object.fromEntries(D.arms.map(a=>[a.id,a])),busy={},rb={},dayN={},slotN={},sit=[],miss=[];
+ const ov=(m,k,s,e)=>(m[k]||[]).some(x=>s<x[1]&&e>x[0]),add=(m,k,s,e)=>(m[k]=m[k]||[]).push([s,e]);
+ for(const r of D.req.slice().sort(()=>Math.random()-.5)){let best=null,bs=1e9;
+  for(const date of days)for(const se of ses){const s=se.start_min,e=s+r.duration_min;if(e>se.end_min)continue;
+   if(ov(busy,r.arm_id+'|'+date,s,e)||(slotN[date+'|'+s]||0)>=D.staff.length)continue;
+   const own=D.rooms.find(x=>x.name==armBy[r.arm_id].code),room=own&&!ov(rb,own.id+'|'+date,s,e)?own:D.rooms.find(x=>!ov(rb,x.id+'|'+date,s,e));if(!room)continue;
+   const sc=(dayN[r.arm_id+'|'+date]||0)*50+Math.random()*2+days.indexOf(date)*.1;if(sc<bs){bs=sc;best={date,s,e,room:room.id}}}
+  if(!best){miss.push(r);continue}
+  add(busy,r.arm_id+'|'+best.date,best.s,best.e);add(rb,best.room+'|'+best.date,best.s,best.e);dayN[r.arm_id+'|'+best.date]=(dayN[r.arm_id+'|'+best.date]||0)+1;slotN[best.date+'|'+best.s]=(slotN[best.date+'|'+best.s]||0)+1;
+  sit.push({arm_id:r.arm_id,subject_id:r.subject_id,date:best.date,start_min:best.s,end_min:best.e,room_id:best.room})}
+ const ib={},cnt={};D.staff.forEach(t=>cnt[t.id]=0);
+ sit.sort((a,b)=>a.date.localeCompare(b.date)||a.start_min-b.start_min).forEach(x=>{
+  const own=D.alloc.find(a=>a.arm_id==x.arm_id&&a.subject_id==x.subject_id)?.staff_id;
+  const c=D.staff.filter(t=>!ov(ib,t.id+'|'+x.date,x.start_min,x.end_min)).sort((a,b)=>((a.id==own)-(b.id==own))||cnt[a.id]-cnt[b.id]);
+  if(c[0]){x.staff_id=c[0].id;cnt[c[0].id]++;add(ib,c[0].id+'|'+x.date,x.start_min,x.end_min)}});
+ S.xres={sit,miss,clash:verifyEx(sit),noinv:sit.filter(x=>!x.staff_id).length};draw()}
+function verifyEx(sit){const out=[],cl=id=>D.arms.find(a=>a.id==id).code;
+ const chk=(key,txt)=>{const g={};sit.forEach(x=>{const k=key(x);if(k)(g[k]=g[k]||[]).push(x)});for(const k in g){const r=g[k].sort((a,b)=>a.start_min-b.start_min);for(let i=1;i<r.length;i++)if(r[i].start_min<r[i-1].end_min)out.push(txt(r[i]))}};
+ chk(x=>x.arm_id+'|'+x.date,x=>`${cl(x.arm_id)} has two papers at once on ${dfmt(x.date)}`);
+ chk(x=>x.room_id+'|'+x.date,x=>`A room is double-booked on ${dfmt(x.date)} at ${f12(x.start_min)}`);
+ chk(x=>x.staff_id?x.staff_id+'|'+x.date:null,x=>`${nm(x.staff_id)} invigilates two papers at once on ${dfmt(x.date)}`);return out}
+async function saveExam(){const r=S.xres;if(!r)return;if(r.clash.length)return msg('Not saved: the timetable has clashes',1);
+ if(D.sit.length&&!confirm('Replace the saved timetable for this assessment?'))return;
+ try{await q(sb.from('assessment_sittings').delete().eq('event_id',S.ev));
+  const rows=r.sit.map(x=>({event_id:S.ev,subject_id:x.subject_id,room_id:x.room_id,exam_date:x.date,start_min:x.start_min,end_min:x.end_min})),ids=[];
+  for(let i=0;i<rows.length;i+=150){const d=await q(sb.from('assessment_sittings').insert(rows.slice(i,i+150)).select('id'));d.sort((a,b)=>a.id-b.id).forEach(x=>ids.push(x.id))}
+  const ents=r.sit.map((x,i)=>({event_id:S.ev,arm_id:x.arm_id,sitting_id:ids[i]})),inv=r.sit.map((x,i)=>x.staff_id?{sitting_id:ids[i],staff_id:x.staff_id}:null).filter(Boolean);
+  for(let i=0;i<ents.length;i+=150)await q(sb.from('assessment_entries').insert(ents.slice(i,i+150)));
+  for(let i=0;i<inv.length;i+=150)await q(sb.from('invigilations').insert(inv.slice(i,i+150)));
+ }catch(e){await sb.from('assessment_sittings').delete().eq('event_id',S.ev);return msg('Database rejected it: '+e.message,1)}
+ S.xres=null;msg('Saved as draft');await load()}
+async function pubExam(){const u=await q(sb.from('v_unscheduled_assessments').select('*').eq('event_id',S.ev));
+ if(u.length)return msg(u.length+' papers are still not scheduled',1);if(!D.xent.length)return msg('Save a timetable first',1);
+ if(!confirm('Publish this timetable?'))return;await q(sb.from('assessment_events').update({status:'published'}).eq('id',S.ev));msg('Published');await load()}
+function resHTML(){const r=S.xres;if(!r)return'';return `<div><b class="${r.miss.length?'bad':'ok'}">${r.sit.length} of ${r.sit.length+r.miss.length} papers placed</b></div>${r.miss.slice(0,12).map(m=>`<div class="bad">Not placed: ${D.arms.find(a=>a.id==m.arm_id).code} ${sn(m.subject_id)}</div>`).join('')}<div class="${r.clash.length?'bad':'ok'}">${r.clash.length?r.clash.slice(0,10).join('<br>'):'Clash check passed: no class, room or invigilator is double-booked'}</div>${r.noinv?`<div class="bad">${r.noinv} papers have no invigilator</div>`:''}`}
+function pgx(armId){const ev=D.ev.find(e=>e.id==S.ev),all=armId=='all';
+ const rows=D.xent.filter(e=>all||e.arm_id==armId).map(e=>({e,s:D.sit.find(x=>x.id==e.sitting_id),i:D.inv.find(x=>x.sitting_id==e.sitting_id)})).filter(x=>x.s).sort((a,b)=>a.s.exam_date.localeCompare(b.s.exam_date)||a.s.start_min-b.s.start_min||a.e.arm_id-b.e.arm_id);
+ const who=all?'ALL CLASSES':D.arms.find(a=>a.id==armId).code;
+ return `<div class="ph">${D.set?.logo_url?`<img class="lg" src="${D.set.logo_url}">`:''}<h2>${(D.set?.name||'').toUpperCase()}</h2><b>${ev.name.toUpperCase()} TIME TABLE: ${who}</b></div><div class="sc tt"><table style="min-width:560px"><tr><th>Date</th><th>Time</th>${all?'<th>Class</th>':''}<th>Subject</th><th>Room</th><th>Invigilator</th></tr>${rows.map(({e,s,i})=>`<tr><td>${dfmt(s.exam_date)}</td><td>${f12(s.start_min)}-${f12(s.end_min)}</td>${all?`<td>${D.arms.find(a=>a.id==e.arm_id).code}</td>`:''}<td>${sn(s.subject_id)}</td><td>${D.rooms.find(r=>r.id==s.room_id)?.name||''}</td><td>${i?nm(i.staff_id):''}</td></tr>`).join('')}</table></div><div class="pt sg">Timetable Officer: ______________ &nbsp; Principal: ______________ &nbsp; Date: ________</div>`}
+function printAllEx(){if(!D.xent.length)return;$('pa').innerHTML=D.arms.filter(a=>D.xent.some(e=>e.arm_id==a.id)).map(a=>`<section class="pg">${pgx(a.id)}</section>`).join('');document.body.classList.add('pall');window.onafterprint=()=>{document.body.classList.remove('pall');$('pa').innerHTML=''};window.print()}
+function exHTML(){const opt=(v,t,sel)=>`<option value="${v}" ${sel?'selected':''}>${t}</option>`;
+ let h=`<div class="card"><h3>New assessment</h3><div class="row half"><select id="evk">${Object.entries(KIND).map(([k,v])=>opt(k,v)).join('')}</select><input id="evn" placeholder="Name, e.g. First CA"></div><div class="row half"><input id="evs" type="date"><input id="eve" type="date"></div><div class="row"><button class="p" onclick="mkEvent()">Create</button></div></div>`;
+ const ev=D.ev.find(e=>e.id==S.ev);if(!ev)return h;const sched=D.xent.length;
+ h+=`<div class="card"><h3>${ev.name}</h3><div class="row"><select onchange="setEv(this.value)">${D.ev.map(e=>opt(e.id,KIND[e.kind]+': '+e.name+' ('+e.status+')',e.id==S.ev)).join('')}</select></div><small>${dfmt(ev.start_date)} to ${dfmt(ev.end_date)}</small>${D.ev.length>1?`<div class="row"><select id="cps">${D.ev.filter(e=>e.id!=S.ev).map(e=>opt(e.id,e.name)).join('')}</select><button onclick="copyFrom()">Copy setup from this</button></div>`:''}</div>`;
+ h+=`<div class="card"><h3>1. Daily sittings</h3>${D.asess.map(s=>`<div class="row"><small>Sitting ${s.session_no}: ${f12(s.start_min)}-${f12(s.end_min)}</small><button onclick="delSess(${s.id})">Remove</button></div>`).join('')}<div class="row"><input id="ss1" type="time" value="08:00"><input id="ss2" type="time" value="10:00"><button class="p" onclick="addSess()">Add</button></div></div>`;
+ h+=`<div class="card"><h3>2. Rooms and papers</h3><small>${D.rooms.length} rooms, ${D.req.length} class papers</small><div class="row"><button onclick="addRooms()">Add a room for every class</button></div><div class="row"><input id="dur" type="number" placeholder="Minutes per paper (60)"><button onclick="loadReq()">Load papers from allocations</button></div></div>`;
+ h+=`<div class="card"><h3>3. Generate</h3><div class="row"><button class="p" onclick="genExam()">Generate</button><button onclick="saveExam()" ${S.xres?'':'disabled'}>Save as draft</button><button onclick="pubExam()" ${sched?'':'disabled'}>Publish</button></div>${resHTML()}</div>`;
+ h+=`<div class="row"><select onchange="S.xarm=this.value;draw()">${opt('all','All classes',S.xarm=='all')}${D.arms.map(a=>opt(a.id,a.code,a.id==S.xarm)).join('')}</select><button onclick="window.print()">Print / PDF</button><button onclick="printAllEx()">Print all</button></div><div class="card">${sched?pgx(S.xarm):'No saved timetable yet.'}</div>`;
+ return h}
+
 busyOn();sb.auth.getSession().then(r=>{busyOff();r.data.session?start():loginUI()});
 </script></body></html>
