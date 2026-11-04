@@ -27,6 +27,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 .sp{width:48px;height:48px;border:5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media print{#ld{display:none!important}}
 .tt td.sel{outline:3px solid #ffb300;outline-offset:-3px}.tt td[onclick]{cursor:pointer}
+.st{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.st div{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.15)}.st b{display:block;font-size:22px}
 </style></head><body>
 <header><h1>Excellentia Timetable Builder</h1><button id="out" style="display:none" onclick="sb.auth.signOut().then(()=>location.reload())">Log out</button></header>
 <div id="msg"></div><nav id="nav"></nav><div id="ld" class="on"><div class="sp"></div><div id="ldt">Loading...</div></div><main id="m"></main><div id="pa"></div>
@@ -35,7 +36,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
 const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
-const S={grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'staff',arm:null,ver:null,sj:null,res:null};
+const S={grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'ov',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
 let busy=0;
 const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
@@ -135,7 +136,7 @@ async function moveTo(d,pn){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;cons
 async function toggleLock(){const e=D.ent.find(x=>x.id==S.sel);if(!e)return;await q(sb.from('weekly_entries').update({locked:!e.locked}).eq('id',e.id));msg(e.locked?'Unlocked':'Locked');await load()}
 async function delAv(id){await q(sb.from('teacher_availability').delete().eq('id',id));await load()}
 async function saveName(){await q(sb.from('school_settings').update({name:$('scn').value.trim(),logo_url:$('slg').value.trim()||null}).eq('id',1));msg('School name saved');await load()}
-function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],['ex','Exams'],['su','Setup']];
+function draw(){const T=[['ov','Overview'],['staff','Staff'],['al','Allocate'],['tt','Timetable'],['ex','Exams'],['su','Setup']];
  $('nav').innerHTML=T.map(t=>`<button class="${S.tab==t[0]?'on':''}" onclick="S.tab='${t[0]}';draw()">${t[1]}</button>`).join('');let h='';
  if(S.tab=='staff')h=`<div class="card"><h3>Add teacher</h3><div class="row half"><input id="sn" placeholder="Staff ID"><input id="ini" placeholder="Initials"></div><div class="row"><input id="fn" placeholder="Full name"></div><div class="row half"><input id="md" type="number" placeholder="Max per day (6)"><input id="mw" type="number" placeholder="Max per week (26)"></div><b>Subjects qualified to teach</b><div>${D.subj.map(s=>`<label class="c sl"><input type="checkbox" class="sj" value="${s.id}">${s.name}</label>`).join('')}</div><div class="row"><button class="p" onclick="addStaff()">Save teacher</button></div></div>
  <div class="card"><h3>Teacher unavailable times</h3><div class="row"><select id="avt">${D.staff.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('')}</select><select id="avd">${DAYS.map((d,i)=>`<option value="${i+1}">${d}</option>`).join('')}</select></div><div class="row"><select id="avf">${lessonP().map(p=>`<option value="${p.period_no}">From P${p.period_no}</option>`).join('')}</select><select id="avu">${lessonP().map(p=>`<option value="${p.period_no}">To P${p.period_no}</option>`).join('')}</select><button class="p" onclick="addAv()">Add</button></div>${D.av.map(x=>`<div class="row"><small>${nm(x.staff_id)} \u00b7 ${DAYS[x.day-1]} ${fm(x.start_min)}\u2013${fm(x.end_min)}</small><button onclick="delAv(${x.id})">Remove</button></div>`).join('')}</div>
@@ -149,6 +150,7 @@ function draw(){const T=[['staff','Staff'],['al','Allocate'],['tt','Timetable'],
  if(S.tab=='tt'){const r=S.res;h=`<div class="row"><button class="p" onclick="gen()">Generate</button><button onclick="saveVer()" ${r?'':'disabled'}>Save as draft</button><button onclick="publish()" ${S.ver?'':'disabled'}>Publish selected</button></div>`;
   if(r)h+=`<div class="card"><b class="${r.miss.length?'bad':'ok'}">${r.total-r.miss.length} of ${r.total} lessons placed</b><div class="${r.clashes.length?'bad':'ok'}">${r.clashes.length?r.clashes.slice(0,10).join('<br>'):'Clash check passed: no teacher is in two classes at the same time, across JSS and SS'}</div>${r.miss.slice(0,15).map(l=>`<div class="bad">Not placed: ${D.arms.find(a=>a.id==l.arm_id).code} ${sn(l.subject_id)}</div>`).join('')}${r.skipped.length?`<div class="bad">${r.skipped.length} allocations have no teacher and were skipped</div>`:''}<small>Nothing is saved until you tap Save as draft. The database re-checks every lesson for clashes.</small></div>`;
   h+=`<div class="row"><select onchange="S.ver=+this.value;load()">${D.ver.map(v=>`<option value="${v.id}" ${v.id==S.ver?'selected':''}>#${v.id} ${v.status}: ${v.label}</option>`).join('')||'<option>No saved timetables</option>'}</select><select onchange="S.mode=this.value;draw()"><option value="class" ${S.mode=='class'?'selected':''}>Class view</option><option value="teacher" ${S.mode=='teacher'?'selected':''}>Teacher view</option></select>${S.mode=='class'?`<select onchange="S.arm=+this.value;draw()">${D.arms.map(a=>`<option value="${a.id}" ${a.id==S.arm?'selected':''}>${a.code}</option>`).join('')}</select>`:`<select onchange="S.tid=+this.value;draw()">${D.staff.map(t=>`<option value="${t.id}" ${t.id==S.tid?'selected':''}>${t.full_name}</option>`).join('')}</select>`}<button onclick="window.print()">Print / PDF</button><button onclick="printAll()">Print all</button></div>${S.ver?selBar():''}<div class="card">${S.ver?pg(S.mode,S.mode=='class'?S.arm:S.tid):'Generate and save a timetable first.'}</div>`}
+ if(S.tab=='ov')h=ovHTML();
  if(S.tab=='ex')h=exHTML();
  if(S.tab=='su')h=`<div class="card"><h3>Setup</h3><div class="row"><input id="scn" value="${D.set?.name||''}" placeholder="School name"><input id="slg" value="${D.set?.logo_url||''}" placeholder="Logo file name, e.g. logo.png"><button class="p" onclick="saveName()">Save</button></div>Terms: ${D.term.length}<div class="row">${D.term.length?'':'<button class="p" onclick="mkTerm()">Create 2026/2027 First Term</button>'}</div><small>${D.arms.length} classes, ${D.subj.length} subjects, ${lessonP().length} lesson periods per day, ${D.fix.length} fixed activities.</small></div>`;
  $('m').innerHTML=h}
@@ -261,6 +263,30 @@ async function saveAlloc(){const sid=+$('asj').value,tid=+$('ate').value,ppw=+$(
  if(!rows.length)return msg('Enter periods per week, or set up the class subjects in step 1 first',1);
  await q(sb.from('class_subject_alloc').upsert(rows,{onConflict:'arm_id,subject_id'}));
  msg('Saved '+rows.length+' allocations'+(none.length?'. No periods set for: '+none.join(', '):''));await load()}
+
+// ===== Overview dashboard =====
+function ovHTML(){const slots=lessonP().length*5-D.fix.length;
+ const req=D.alloc.reduce((x,a)=>x+a.periods_per_week,0),placed=D.ent.reduce((x,e)=>x+(e.is_double?2:1),0),noT=D.alloc.filter(a=>!a.staff_id).length;
+ const armTot={};D.alloc.forEach(a=>armTot[a.arm_id]=(armTot[a.arm_id]||0)+a.periods_per_week);
+ const over=D.arms.filter(a=>(armTot[a.id]||0)>slots).map(a=>a.code),none=D.arms.filter(a=>!armTot[a.id]).map(a=>a.code);
+ const load={};D.alloc.forEach(a=>{if(a.staff_id)load[a.staff_id]=(load[a.staff_id]||0)+a.periods_per_week});
+ const ot=D.staff.filter(t=>t.max_periods_week&&(load[t.id]||0)>t.max_periods_week),idle=D.staff.filter(t=>!load[t.id]);
+ const dr=D.ver.filter(v=>v.status=='draft').length,pb=D.ver.filter(v=>v.status=='published').length,cur=D.ver.find(v=>v.id==S.ver);
+ const miss=cur?Math.max(0,req-placed):0,card=(t,v,bad)=>`<div><small>${t}</small><b class="${bad?'bad':''}">${v}</b></div>`;
+ const al=[];
+ if(!D.term.length)al.push('No term created yet (Setup tab).');
+ if(!D.staff.length)al.push('No teachers added yet (Staff tab).');
+ if(!D.alloc.length)al.push('No class subjects set up yet (Allocate tab, step 1).');
+ else if(none.length)al.push(none.length+' classes have no subjects: '+none.slice(0,8).join(', ')+(none.length>8?'...':''));
+ if(noT)al.push(noT+' class subjects have no teacher (Allocate tab, step 2).');
+ if(over.length)al.push('Too many periods for the week in: '+over.join(', ')+' (limit '+slots+').');
+ ot.forEach(t=>al.push(t.full_name+' has '+load[t.id]+' periods allocated but the weekly limit is '+t.max_periods_week+'.'));
+ if(D.alloc.length&&!D.ver.length)al.push('No timetable saved yet. Open Timetable and tap Generate.');
+ if(cur&&miss)al.push('The selected timetable is missing '+miss+' lessons.');
+ const ck=(ok,t)=>`<div class="${ok?'ok':'bad'}">${ok?'\u2713':'\u2717'} ${t}</div>`;
+ return `<div class="st">${card('Class arms',D.arms.length)}${card('Teachers',D.staff.length)}${card('Subjects',D.subj.filter(s=>s.is_active!==false).length)}${card('Weekly lessons needed',req)}${card('Lessons scheduled',cur?placed+' / '+req:'none yet',cur&&miss>0)}${card('Missing teachers',noT,noT>0)}${card('Draft timetables',dr)}${card('Published timetables',pb)}${card('Assessments',D.ev.length)}${card('Papers scheduled',D.ev.length?D.xent.length+' / '+D.req.length:'\u2013')}</div>
+ <div class="card"><h3>Needs attention</h3>${al.length?al.map(x=>`<div class="bad">\u2022 ${x}</div>`).join(''):'<div class="ok">Nothing needs attention.</div>'}${idle.length&&D.alloc.length?`<small>No classes yet for: ${idle.slice(0,6).map(t=>t.full_name).join(', ')}${idle.length>6?'...':''}</small>`:''}</div>
+ <div class="card"><h3>Setup progress</h3>${ck(D.term.length>0,'Term created')}${ck(D.staff.length>0,'Teachers added')}${ck(D.alloc.length>0,'Class subjects set up')}${ck(D.alloc.length>0&&!noT,'Every subject has a teacher')}${ck(D.ver.length>0,'Timetable saved')}${ck(pb>0,'Timetable published')}${ck(D.ev.length>0,'First CA or exam created')}</div>`}
 
 busyOn();sb.auth.getSession().then(r=>{busyOff();r.data.session?start():loginUI()});
 </script></body></html>
