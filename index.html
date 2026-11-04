@@ -36,7 +36,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
 const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
-const S={grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'ov',arm:null,ver:null,sj:null,res:null};
+const S={edit:null,grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'ov',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
 let busy=0;
 const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
@@ -57,10 +57,17 @@ const lessonP=(d=1)=>perFor(d).filter(p=>p.kind=='lesson');
 const nm=id=>D.staffAll.find(s=>s.id==id)?.initials||D.staffAll.find(s=>s.id==id)?.full_name||'?';
 const code=id=>D.subj.find(s=>s.id==id)?.code,sn=id=>D.subj.find(s=>s.id==id)?.name;
 async function addStaff(){const v=i=>$(i).value.trim();if(!v('sn')||!v('fn'))return msg('Staff ID and full name are required',1);
- const [s]=await q(sb.from('staff').insert({staff_no:v('sn'),full_name:v('fn'),initials:v('ini')||null,max_periods_day:+v('md')||6,max_periods_week:+v('mw')||26}).select());
- const ids=[...document.querySelectorAll('.sj:checked')].map(c=>+c.value);
+ const ids=[...document.querySelectorAll('.sj:checked')].map(c=>+c.value),f={full_name:v('fn'),initials:v('ini')||null,max_periods_day:+v('md')||6,max_periods_week:+v('mw')||26};
+ if(S.edit){const id=S.edit,drop=D.qual.filter(x=>x.staff_id==id&&!ids.includes(x.subject_id)).map(x=>x.subject_id).filter(j=>D.alloc.some(a=>a.staff_id==id&&a.subject_id==j));
+  if(drop.length)return msg('Give these subjects to another teacher first, then untick them: '+[...new Set(drop)].map(j=>sn(j)).join(', '),1);
+  await q(sb.from('staff').update(f).eq('id',id));await q(sb.from('teacher_qualifications').delete().eq('staff_id',id));
+  if(ids.length)await q(sb.from('teacher_qualifications').insert(ids.map(i=>({staff_id:id,subject_id:i}))));
+  S.edit=null;msg('Changes saved');return load()}
+ const [s]=await q(sb.from('staff').insert({staff_no:v('sn'),...f}).select());
  if(ids.length)await q(sb.from('teacher_qualifications').insert(ids.map(i=>({staff_id:s.id,subject_id:i}))));
  msg('Saved '+v('fn'));await load()}
+function editStaff(id){S.edit=id;S.tab='staff';draw();window.scrollTo(0,0)}
+const EV=k=>{const t=D.staff.find(x=>x.id==S.edit);return String(t?(t[k]??''):'').replace(/"/g,'&quot;')};
 function pick(sec){document.querySelectorAll('.ar').forEach(c=>c.checked=sec=='all'?false:c.dataset.s==sec)}
 async function mkTerm(){const [a]=await q(sb.from('academic_sessions').insert({name:'2026/2027',is_current:true}).select());
  await q(sb.from('terms').insert({session_id:a.id,name:'First Term',start_date:'2026-09-14',end_date:'2026-12-18'}));msg('Term created');await load()}
@@ -138,9 +145,9 @@ async function delAv(id){await q(sb.from('teacher_availability').delete().eq('id
 async function saveName(){await q(sb.from('school_settings').update({name:$('scn').value.trim(),logo_url:$('slg').value.trim()||null}).eq('id',1));msg('School name saved');await load()}
 function draw(){const T=[['ov','Overview'],['staff','Staff'],['al','Allocate'],['tt','Timetable'],['ex','Exams'],['su','Setup']];
  $('nav').innerHTML=T.map(t=>`<button class="${S.tab==t[0]?'on':''}" onclick="S.tab='${t[0]}';draw()">${t[1]}</button>`).join('');let h='';
- if(S.tab=='staff')h=`<div class="card"><h3>Add teacher</h3><div class="row half"><input id="sn" placeholder="Staff ID"><input id="ini" placeholder="Initials"></div><div class="row"><input id="fn" placeholder="Full name"></div><div class="row half"><input id="md" type="number" placeholder="Max per day (6)"><input id="mw" type="number" placeholder="Max per week (26)"></div><b>Subjects qualified to teach</b><div>${D.subj.map(s=>`<label class="c sl"><input type="checkbox" class="sj" value="${s.id}">${s.name}</label>`).join('')}</div><div class="row"><button class="p" onclick="addStaff()">Save teacher</button></div></div>
+ if(S.tab=='staff')h=`<div class="card"><h3>${S.edit?'Edit teacher':'Add teacher'}</h3><div class="row half"><input id="sn" placeholder="Staff ID" value="${EV('staff_no')}" ${S.edit?'readonly':''}><input id="ini" placeholder="Initials" value="${EV('initials')}"></div><div class="row"><input id="fn" placeholder="Full name" value="${EV('full_name')}"></div><div class="row half"><input id="md" type="number" placeholder="Max per day (6)" value="${EV('max_periods_day')}"><input id="mw" type="number" placeholder="Max per week (26)" value="${EV('max_periods_week')}"></div><b>Subjects qualified to teach</b><div>${D.subj.map(s=>`<label class="c sl"><input type="checkbox" class="sj" value="${s.id}" ${S.edit&&D.qual.some(z=>z.staff_id==S.edit&&z.subject_id==s.id)?'checked':''}>${s.name}</label>`).join('')}</div><div class="row"><button class="p" onclick="addStaff()">${S.edit?'Save changes':'Save teacher'}</button>${S.edit?'<button onclick="S.edit=null;draw()">Cancel</button>':''}</div></div>
  <div class="card"><h3>Teacher unavailable times</h3><div class="row"><select id="avt">${D.staff.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('')}</select><select id="avd">${DAYS.map((d,i)=>`<option value="${i+1}">${d}</option>`).join('')}</select></div><div class="row"><select id="avf">${lessonP().map(p=>`<option value="${p.period_no}">From P${p.period_no}</option>`).join('')}</select><select id="avu">${lessonP().map(p=>`<option value="${p.period_no}">To P${p.period_no}</option>`).join('')}</select><button class="p" onclick="addAv()">Add</button></div>${D.av.map(x=>`<div class="row"><small>${nm(x.staff_id)} \u00b7 ${DAYS[x.day-1]} ${fm(x.start_min)}\u2013${fm(x.end_min)}</small><button onclick="delAv(${x.id})">Remove</button></div>`).join('')}</div>
- <div class="card sc"><table><tr><th>ID</th><th>Name</th><th>Subjects</th><th></th></tr>${D.staff.map(s=>`<tr><td>${s.staff_no}</td><td>${s.full_name}</td><td>${D.qual.filter(x=>x.staff_id==s.id).map(x=>sn(x.subject_id)).join(', ')}</td><td><button onclick="delStaff(${s.id})">Remove</button></td></tr>`).join('')}</table></div>`;
+ <div class="card sc"><table><tr><th>ID</th><th>Name</th><th>Subjects</th><th></th></tr>${D.staff.map(s=>`<tr><td>${s.staff_no}</td><td>${s.full_name}</td><td>${D.qual.filter(x=>x.staff_id==s.id).map(x=>sn(x.subject_id)).join(', ')}</td><td><button onclick="editStaff(${s.id})">Edit</button> <button onclick="delStaff(${s.id})">Remove</button></td></tr>`).join('')}</table></div>`;
  if(S.tab=='al'){const qs=D.qual.filter(x=>x.subject_id==S.sj).map(x=>x.staff_id);
   h=quickCard()+unHTML()+`<div class="card"><h3>2. Assign a teacher to a subject</h3><small>Leave periods blank to keep the periods from step 1.</small><div class="row"><select id="asj" onchange="S.sj=+this.value;draw()">${D.subj.map(s=>`<option value="${s.id}" ${s.id==S.sj?'selected':''}>${s.name}</option>`).join('')}</select><select id="ate"><option value="">Choose teacher</option>${D.staff.filter(s=>qs.includes(s.id)).map(s=>`<option value="${s.id}">${s.full_name}</option>`).join('')}</select></div>
   <div class="row half"><input id="ppw" type="number" placeholder="Periods per week"><input id="dbl" type="number" placeholder="Double periods (0)"></div>
