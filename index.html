@@ -37,7 +37,7 @@ label.c{display:inline-flex;gap:4px;align-items:center;margin:3px 8px 3px 0;font
 const sb=supabase.createClient('https://gbklrppwekfdgjxlkakk.supabase.co','sb_publishable_rPRyA-2oZlE455wn_NA66w_ITWA7Gm8');
 const $=id=>document.getElementById(id),DAYS=['Mon','Tue','Wed','Thu','Fri'];
 const D={arms:[],subj:[],staff:[],qual:[],alloc:[],per:[],fix:[],term:[],ver:[],ent:[],av:[]};
-const S={ok:false,admin:false,tonly:false,roles:[],uid:null,edit:null,grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'ov',arm:null,ver:null,sj:null,res:null};
+const S={xe:null,ok:false,admin:false,tonly:false,roles:[],uid:null,edit:null,grp:'JSS standard',qa:[],ev:null,xarm:'all',xres:null,sel:null,mode:'class',tid:null,tab:'ov',arm:null,ver:null,sj:null,res:null};
 const msg=(t,bad)=>{$('msg').textContent=t;$('msg').className=bad?'bad':'ok'};
 let busy=0;
 const busyOn=t=>{busy++;$('ldt').textContent=t||'Loading...';$('ld').classList.add('on')};
@@ -230,7 +230,7 @@ function resHTML(){const r=S.xres;if(!r)return'';return `<div><b class="${r.miss
 function pgx(armId){const ev=D.ev.find(e=>e.id==S.ev),all=armId=='all';
  const rows=D.xent.filter(e=>all||e.arm_id==armId).map(e=>({e,s:D.sit.find(x=>x.id==e.sitting_id),i:D.inv.find(x=>x.sitting_id==e.sitting_id)})).filter(x=>x.s).sort((a,b)=>a.s.exam_date.localeCompare(b.s.exam_date)||a.s.start_min-b.s.start_min||a.e.arm_id-b.e.arm_id);
  const who=all?'ALL CLASSES':D.arms.find(a=>a.id==armId).code;
- return `<div class="ph">${D.set?.logo_url?`<img class="lg" src="${D.set.logo_url}">`:''}<h2>${(D.set?.name||'').toUpperCase()}</h2><b>${ev.name.toUpperCase()} TIME TABLE: ${who}</b></div><div class="sc tt"><table style="min-width:560px"><tr><th>Date</th><th>Time</th>${all?'<th>Class</th>':''}<th>Subject</th><th>Room</th><th>Invigilator</th></tr>${rows.map(({e,s,i})=>`<tr><td>${dfmt(s.exam_date)}</td><td>${f12(s.start_min)}-${f12(s.end_min)}</td>${all?`<td>${D.arms.find(a=>a.id==e.arm_id).code}</td>`:''}<td>${sn(s.subject_id)}</td><td>${D.rooms.find(r=>r.id==s.room_id)?.name||''}</td><td>${i?nm(i.staff_id):''}</td></tr>`).join('')}</table></div><div class="pt sg">Timetable Officer: ______________ &nbsp; Principal: ______________ &nbsp; Date: ________</div>`}
+ return `<div class="ph">${D.set?.logo_url?`<img class="lg" src="${D.set.logo_url}">`:''}<h2>${(D.set?.name||'').toUpperCase()}</h2><b>${ev.name.toUpperCase()} TIME TABLE: ${who}</b></div><div class="sc tt"><table style="min-width:560px"><tr><th>Date</th><th>Time</th>${all?'<th>Class</th>':''}<th>Subject</th><th>Room</th><th>Invigilator</th><th class="noprint"></th></tr>${rows.map(({e,s,i})=>`<tr><td>${dfmt(s.exam_date)}</td><td>${f12(s.start_min)}-${f12(s.end_min)}</td>${all?`<td>${D.arms.find(a=>a.id==e.arm_id).code}</td>`:''}<td>${sn(s.subject_id)}</td><td>${D.rooms.find(r=>r.id==s.room_id)?.name||''}</td><td>${i?nm(i.staff_id):''}</td><td class="noprint">${S.ok&&ev.status!='published'?`<button onclick="S.xe=${e.id};draw();window.scrollTo(0,0)">Edit</button>`:''}</td></tr>`).join('')}</table></div><div class="pt sg">Timetable Officer: ______________ &nbsp; Principal: ______________ &nbsp; Date: ________</div>`}
 function printAllEx(){if(!D.xent.length)return;$('pa').innerHTML=D.arms.filter(a=>D.xent.some(e=>e.arm_id==a.id)).map(a=>`<section class="pg">${pgx(a.id)}</section>`).join('');document.body.classList.add('pall');window.onafterprint=()=>{document.body.classList.remove('pall');$('pa').innerHTML=''};window.print()}
 function exHTML(){const opt=(v,t,sel)=>`<option value="${v}" ${sel?'selected':''}>${t}</option>`;
  let h=`<div class="card"><h3>New assessment</h3><div class="row half"><select id="evk">${Object.entries(KIND).map(([k,v])=>opt(k,v)).join('')}</select><input id="evn" placeholder="Name, e.g. First CA"></div><div class="row half"><input id="evs" type="date"><input id="eve" type="date"></div><div class="row"><button class="p" onclick="mkEvent()">Create</button></div></div>`;
@@ -239,7 +239,7 @@ function exHTML(){const opt=(v,t,sel)=>`<option value="${v}" ${sel?'selected':''
  h+=`<div class="card"><h3>1. Daily sittings</h3>${D.asess.map(s=>`<div class="row"><small>Sitting ${s.session_no}: ${f12(s.start_min)}-${f12(s.end_min)}</small><button onclick="delSess(${s.id})">Remove</button></div>`).join('')}<div class="row"><input id="ss1" type="time" value="08:00"><input id="ss2" type="time" value="10:00"><button class="p" onclick="addSess()">Add</button></div></div>`;
  h+=`<div class="card"><h3>2. Rooms and papers</h3><small>${D.rooms.length} rooms, ${D.req.length} class papers</small><div class="row"><button onclick="addRooms()">Add a room for every class</button></div><div class="row"><input id="dur" type="number" placeholder="Minutes per paper (60)"><button onclick="loadReq()">Load papers from allocations</button></div></div>`;
  h+=`<div class="card"><h3>3. Generate</h3><div class="row"><button class="p" onclick="genExam()">Generate</button><button onclick="saveExam()" ${S.xres?'':'disabled'}>Save as draft</button><button onclick="pubExam()" ${sched?'':'disabled'}>Publish</button></div>${resHTML()}</div>`;
- h+=`<div class="row"><select onchange="S.xarm=this.value;draw()">${opt('all','All classes',S.xarm=='all')}${D.arms.map(a=>opt(a.id,a.code,a.id==S.xarm)).join('')}</select><button onclick="window.print()">Print / PDF</button><button onclick="printAllEx()">Print all</button><button onclick="expEx()">Excel</button></div><div class="card">${sched?pgx(S.xarm):'No saved timetable yet.'}</div>`;
+ h+=`<div class="row"><select onchange="S.xarm=this.value;draw()">${opt('all','All classes',S.xarm=='all')}${D.arms.map(a=>opt(a.id,a.code,a.id==S.xarm)).join('')}</select><button onclick="window.print()">Print / PDF</button><button onclick="printAllEx()">Print all</button><button onclick="expEx()">Excel</button></div>${S.xe?xeHTML():''}<div class="card">${sched?pgx(S.xarm):'No saved timetable yet.'}</div>`;
  return h}
 
 // ===== Quick class-subject setup =====
@@ -346,6 +346,23 @@ async function start(){$('out').style.display='';const u=(await sb.auth.getUser(
  if(!S.roles.length){$('nav').innerHTML='';$('m').innerHTML='<div class="card"><h3>No access yet</h3>Your account has no role. Ask the school administrator to invite your email address.</div>';return}
  S.ok=S.roles.some(r=>['super_admin','principal','vice_principal','timetable_officer'].includes(r));S.admin=S.roles.includes('super_admin');
  S.tonly=S.roles.length==1&&S.roles[0]=='teacher';if(S.tonly)S.mode='teacher';if(!S.ok)S.tab='tt';await load()}
+
+// ===== Move a single exam paper =====
+function xeHTML(){const e=D.xent.find(x=>x.id==S.xe);if(!e)return'';const s=D.sit.find(x=>x.id==e.sitting_id),iv=D.inv.find(x=>x.sitting_id==s.id),ev=D.ev.find(x=>x.id==S.ev),days=[];
+ for(let d=new Date(ev.start_date+'T00:00:00Z');d<=new Date(ev.end_date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1)){const w=d.getUTCDay();if(w>=1&&w<=5)days.push(d.toISOString().slice(0,10))}
+ const o=(v,t,sel)=>`<option value="${v}" ${sel?'selected':''}>${t}</option>`;
+ return `<div class="card"><h3>Move paper</h3><b>${D.arms.find(a=>a.id==e.arm_id).code} \u00b7 ${sn(s.subject_id)}</b><div class="row"><select id="xd">${days.map(d=>o(d,dfmt(d),d==s.exam_date)).join('')}</select><select id="xs">${D.asess.map(x=>o(x.id,f12(x.start_min)+'-'+f12(x.end_min),x.start_min==s.start_min)).join('')}</select></div><div class="row"><select id="xr">${D.rooms.map(r=>o(r.id,r.name,r.id==s.room_id)).join('')}</select><select id="xi">${o('0','No invigilator',!iv)}${D.staff.map(t=>o(t.id,t.full_name,iv&&t.id==iv.staff_id)).join('')}</select></div><div class="row"><button class="p" onclick="saveXe()">Save</button><button onclick="S.xe=null;draw()">Cancel</button></div></div>`}
+async function saveXe(){const e=D.xent.find(x=>x.id==S.xe),s=D.sit.find(x=>x.id==e.sitting_id),old=D.inv.find(x=>x.sitting_id==s.id);
+ const se=D.asess.find(x=>x.id==+$('xs').value),dur=s.end_min-s.start_min,inv=+$('xi').value;
+ if(se.start_min+dur>se.end_min)return msg('This paper is too long for that sitting',1);
+ const nv={exam_date:$('xd').value,start_min:se.start_min,end_min:se.start_min+dur,room_id:+$('xr').value},ov={exam_date:s.exam_date,start_min:s.start_min,end_min:s.end_min,room_id:s.room_id};
+ let moved=false;
+ try{if(old)await q(sb.from('invigilations').delete().eq('id',old.id));
+  await q(sb.from('assessment_sittings').update(nv).eq('id',s.id));moved=true;
+  if(inv)await q(sb.from('invigilations').insert({sitting_id:s.id,staff_id:inv}));
+ }catch(err){if(moved)await sb.from('assessment_sittings').update(ov).eq('id',s.id);
+  if(old)await sb.from('invigilations').insert({sitting_id:s.id,staff_id:old.staff_id});await load();return}
+ S.xe=null;msg('Paper moved');await load()}
 
 busyOn();sb.auth.getSession().then(r=>{busyOff();r.data.session?start():loginUI()});
 </script></body></html>
